@@ -1,0 +1,11 @@
+---
+title: "alessandra_puig-santana_snowshoe_report"
+author: "Alessandra Puig-Santana"
+date: "11/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
