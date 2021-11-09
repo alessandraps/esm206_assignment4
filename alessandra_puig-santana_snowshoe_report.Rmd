@@ -3,9 +3,199 @@ title: "alessandra_puig-santana_snowshoe_report"
 author: "Alessandra Puig-Santana"
 date: "11/7/2021"
 output: html_document
+code_folding: hide 
 ---
+### Overview 
+This reports explores the juvenile snowshoe hare population at Bonanza Creek from 1999 - 2012.
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+### Citation
+Kielland, K., F.S. Chapin, R.W. Ruess, and Bonanza Creek LTER. 2017. Snowshoe hare physical data in Bonanza Creek Experimental Forest: 1999-Present ver 22. Environmental Data Initiative. https://doi.org/10.6073/pasta/03dce4856d79b91557d8e6ce2cbcdc14 
+
+```{r setup, include=FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+library(here)
+library(lubridate)
+library(janitor)
+library(ggbeeswarm)
+library(kableExtra)
+library(effsize)
+library(broom)
 ```
 
+```{r}
+# Read in data
+bonanza_hares <- read_csv(here("data", "bonanza_hares.csv")) %>%
+  mutate(sex = case_when( # Changed names in sex observations 
+    sex %in% "f" ~ "Female",
+    sex %in% "m" ~ "Male"))
+```
+
+## Juvenile Hare Initial Investigation
+Annual juvenile hare trap counts. Count the total number of juvenile hare trappings during each year of the study, and create a finalized data visualization of the counts by year. Include a figure caption below the figure in your report. 
+
+### Data and Analysis
+```{r}
+j_hares <- bonanza_hares %>%
+  filter(age == "j") %>% # Filter for juveniles in the age column
+  mutate(date = mdy(date)) %>% # Edited date column to have date in yyyy-dd-mm
+  mutate(year = year(date)) # Created new column with the year 
+
+j_hares_count <- j_hares %>% #Subset of data counting the amount of hares per year
+  count(year)
+
+# Annual juvenile hare trap counts 
+j_hares_summary <- j_hares_count %>% # Summary table statistics including mean, median, max, and min
+  summarize(j_hares_mean = mean(n, na.rm = TRUE),
+            j_hares_median = median(n, na.rm = TRUE),
+            j_hares_max = max(n, na.rm = TRUE),
+            j_hares_min = min(n, na.rm = TRUE))
+
+# Creating summary table 
+j_hares_summary_table <- j_hares_summary %>%
+  kbl() %>%
+  kable_styling(full_width = FALSE, font = 13)
+```
+
+```{r, fig.cap= "Figure 1: This bar graph demonstates the amount of juveniles snowshoe hares collected from 1999 to 2012."}
+ggplot(data = j_hares_count, aes(x = year, 
+                           y = n)) +
+  geom_line(color = "darkgreen") +
+  scale_x_discrete(limit = c(1999:2012)) +
+  labs(x = "Year",
+       y = "Count",
+       title = "Amount of Juvenile Snowshoe Hares collected from 1999-2012") +
+  theme_minimal()
+```
+
+The average of juvenile hares trapped through 1999 to 2012 `r round(j_hares_summary$j_hares_mean, 0)`. The median of juvenile hares `r round(j_hares_summary$j_hares_median, 0)`. The maximum amount of hares caught were in 1999 with `r j_hares_summary$j_hares_max` and a minimum in 2010 with `r j_hares_summary$j_hares_min`. 
+
+## Visualize juvenile hare weights
+Create a finalized data visualization (or visualizations) in which you compare **juvenile hare weights by sex and site (grid)** (ignore other variables). You should include groups where these variables are not recorded (`NA`). Include finalized figure captions below your visualization(s).
+
+Then, in 2 - 3 sentences below your visualization(s) describe in text the main takeaways that you would want the audience to understand from your figures.
+```{r, fig.cap = "Figure 2: This scatterplot demonstrates the differences in average weights (g) between male and female juvenile snowshoe hares in the three collection sites."}
+sub_juv_hares <- j_hares %>%
+  group_by(sex, grid) %>% 
+  mutate(grid = case_when(
+    grid == "bonbs" ~ "Bonanza Black Spruce",
+    grid == "bonmat" ~ "Bonanza Mature",
+    grid == "bonrip" ~ "Bonanza Riparian"))
+
+# Data Visualization
+ggplot(data = sub_juv_hares, aes(x = sex,
+                                 y = weight)) +
+  geom_jitter(aes(color = sex)) +
+  scale_color_manual(values = c("green", "blue"), name = "Sex") +
+  geom_boxplot(fill = NA, width = 0.3, outlier.color = NA) +
+  stat_summary(fun = mean,
+               geom = "point",
+               shape = 20,
+               size = 4,
+               color = "black",
+               fill = "black") +
+  facet_wrap(~ grid) +
+  theme_minimal() +
+  labs(title = "Weight differences between male and female snowshoe hares in the three different collection sites")
+```
+
+## Juvenile weight comparisons (male and female)
+Juvenile weight comparison (male & female snowshoe hares). Further compare mean weights for **juvenile male and female snowshoe hares** included in this study. In this section, you should include:
+
+A finalized table containing the mean, standard deviation, and sample size for male and female juvenile snowshoe hares, with a table caption (remember, a table caption should be placed *above* the table in your report)
+```{r}
+# Summary statistics
+j_hares_sex <- j_hares %>%
+  select("sex", "weight") %>%
+  group_by(sex) %>%
+  drop_na(weight) %>%
+  summarize(mean = round(mean(weight), 2),
+            sd = round(sd(weight), 2),
+            sample = n())
+
+# Summary Statistics table 
+j_hares_sex %>% 
+  kable(col.name = c("Sex", "Mean (g)", "Standard Deviation (g)", "Sample Size"))
+```
+
+### Exploratory data
+
+```{r}
+# Statistical data
+
+# Pulling weight vectors for both male and female juvenile snowshoe hares
+m_hares <- j_hares %>%
+  filter(sex == "Male") %>% 
+  drop_na(weight) %>%
+  pull(weight)
+
+f_hares <- j_hares %>%
+  filter(sex == "Female") %>%
+  drop_na(weight) %>%
+  pull(weight)
+
+# Plotting exploratory visualizations to check assumptions
+# For males: 
+hist(m_hares) # Demonstrating normal distribution - looks relatively normal?
+qqnorm(m_hares) # Demonstrating linearity - pretty linear?
+
+#For females: 
+hist(f_hares) # Negatively skewed
+qqnorm(f_hares) # Pretty linear?
+
+# Overall: assumptions of normality hold, & sample size additionally >> Central Limit Theorem (means will be normally distributed). Two-sample t-test OK for means comparison! 
+
+# Running a ttest on male and female juvenile snowshoe hares
+j_hares_ttest <- t.test(m_hares, f_hares)
+
+# Tidy model for output on ttest values 
+tidy_j_hares_tttest <- tidy(j_hares_ttest)
+
+# Mean and Standard deviations for male and female snowshoe hares
+mean_m_j_hares <- mean(m_hares)
+sd_m_j_hares <- sd(m_hares)
+mean_f_j_hares <- mean(f_hares)
+sd_f_j_hares <- sd(f_hares)
+
+# Effect size 
+j_hares_effsize <- cohen.d(m_hares, f_hares)
+```
+** Add analysis ** 
+
+## Relationship between juvenile weight & hind foot length
+Relationship between juvenile weight & hind foot length. Explore the relationship between juvenile snowshoe hare hind foot length (variable `hindft`, recorded in millimeters), and weight. Include all juvenile hares in the study. Create a final visualization of juvenile hare hind foot length versus weight. Include a figure caption.
+
+```{r}
+# Do linear regression model 
+linear_model_j_hares <- lm(weight ~ hindft, data = j_hares)
+
+# Tidy version of model
+tidy_linear_model_j_hares <- tidy(linear_model_j_hares)
+glance_linear_model_j_hares <- glance(linear_model_j_hares)
+
+# Visualization of linear model
+plot(linear_model_j_hares)
+
+# Calculate Pearson's r correlation
+cor_j_hares <- cor.test(j_hares$weight, j_hares$hindft)
+
+# Tidy Pearson's r correlation
+tidy_cor_j_hares <- tidy(cor_j_hares)
+```
+```{r}
+# Data visualization of model
+ggplot(data = j_hares, aes(x = hindft, y = weight)) +
+  geom_point(aes(color = sex), size = 2) +
+  geom_smooth(method = lm) +
+  theme_minimal() +
+  labs(x = "Hind Foot (mm)",
+       y = "Weight (g)",
+       title = "HFL and Weight")
+```
+
+## Summary 
+Summary: Include a very short summary describing your main findings from your juvenile hares exploration (bullet points are fine)
+
+## Citations 
+Citations: Include citations (professionally formatted), including the data citation and any other resources that were references in your mini report.
